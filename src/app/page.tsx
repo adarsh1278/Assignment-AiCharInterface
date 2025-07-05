@@ -64,14 +64,14 @@ export default function ChatPage() {
         body: JSON.stringify({ message: content, conversationId: 'mock-convo' })
       })
 
-      const aiMessage = await res.json()
+      const aiMessage: Message = await res.json()
 
-      setMessages((prev: any) =>
-        prev.map((m: any) =>
-          m.id === userMessage.id ? { ...m, status: 'sent' } : m
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === userMessage.id ? { ...m, status: 'sent' as const } : m
         ).concat(aiMessage)
       )
-    } catch (err) {
+    } catch {
       setMessages(prev =>
         prev.map(m =>
           m.id === userMessage.id ? { ...m, status: 'failed' } : m

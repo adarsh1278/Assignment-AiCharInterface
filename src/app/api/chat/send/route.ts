@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
-  const { message, conversationId } = await request.json()
+  const { message } = await request.json()
   await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
 
   const aiResponses = [
