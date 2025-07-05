@@ -1,103 +1,149 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import React, { useEffect, useRef, useState } from 'react'
+import { SendHorizonal, RefreshCw } from 'lucide-react'
+
+type MessageStatus = 'sending' | 'sent' | 'failed'
+type Sender = 'user' | 'ai'
+
+interface Message {
+  id: string
+  message: string
+  timestamp: string
+  sender: Sender
+  status: MessageStatus
+}
+
+export default function ChatPage() {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [typing, setTyping] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // Scroll to bottom
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  // Fetch chat history on mount
+  useEffect(() => {
+    const fetchHistory = async () => {
+      const res = await fetch('/api/chat/history')
+      const data = await res.json()
+      setMessages(data.messages)
+    }
+    fetchHistory()
+  }, [])
+
+  const sendMessage = async (content: string, retryId?: string) => {
+    const userMessage: Message = {
+      id: retryId || crypto.randomUUID(),
+      message: content,
+      timestamp: new Date().toISOString(),
+      sender: 'user',
+      status: 'sending'
+    }
+
+    if (!retryId) {
+      setMessages(prev => [...prev, userMessage])
+    } else {
+      setMessages(prev =>
+        prev.map(m => (m.id === retryId ? { ...m, status: 'sending' } : m))
+      )
+    }
+
+    setTyping(true)
+
+    try {
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        body: JSON.stringify({ message: content, conversationId: 'mock-convo' })
+      })
+
+      const aiMessage = await res.json()
+
+      setMessages((prev: any) =>
+        prev.map((m: any) =>
+          m.id === userMessage.id ? { ...m, status: 'sent' } : m
+        ).concat(aiMessage)
+      )
+    } catch (err) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === userMessage.id ? { ...m, status: 'failed' } : m
+        )
+      )
+    } finally {
+      setTyping(false)
+    }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim()) return
+    sendMessage(input)
+    setInput('')
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="flex flex-col h-screen bg-background text-foreground">
+      <div className="flex-1 overflow-auto p-4 space-y-2">
+        {messages.map(msg => (
+          <div
+            key={msg.id}
+            className={`max-w-[75%] p-3 rounded-xl relative whitespace-pre-wrap break-words ${msg.sender === 'user'
+              ? 'bg-blue-500 text-white self-end ml-auto'
+              : 'bg-gray-200 text-black self-start'
+              }`}
+          >
+            {msg.message}
+            <div className="text-xs mt-1 text-gray-500">
+              {new Date(msg.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+              {msg.status === 'sending' && ' • Sending'}
+              {msg.status === 'failed' && (
+                <button
+                  className="text-red-500 ml-2"
+                  onClick={() => sendMessage(msg.message, msg.id)}
+                  title="Retry"
+                >
+                  <RefreshCw size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        {typing && (
+          <div className="bg-gray-100 text-gray-600 p-3 rounded-xl max-w-[60%]">
+            AI is typing...
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="flex border-t p-2 items-center gap-2 bg-white"
+      >
+        <input
+          type="text"
+          className="flex-1 px-4 py-2 rounded-full border outline-none"
+          placeholder="Type a message..."
+          value={input}
+          onChange={e => setInput(e.target.value)}
+        />
+        <button type="submit" className="bg-blue-500 p-2 rounded-full text-white">
+          <SendHorizonal size={18} />
+        </button>
+      </form>
     </div>
-  );
+  )
 }
