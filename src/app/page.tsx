@@ -1,115 +1,168 @@
-'use client'
+"use client"
+import React, { useEffect, useRef, useState } from 'react'
+import { Loader2, Sparkles } from 'lucide-react'
+import { useAppDispatch, useAppSelector } from '../../store/hooks'
+import { fetchMessages, sendMessage } from '../../store/actions/chatActions'
+import type { Message } from '../../store/reducers/chatReducer'
+import MessageBubble from '../components/MessageBubble'
+import TypingIndicator from '../components/TypingIndicator'
+import ChatInput from '../components/ChatInput'
 
-import React, { useEffect, useRef, useState } from 'react';
-import { SendHorizonal, RefreshCw } from 'lucide-react';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { fetchMessages, sendMessage } from '../../store/actions/chatActions';
-import type { Message } from '../../store/reducers/chatReducer';
+// Main Chat Component
+export default function FuturisticChat() {
+  const dispatch = useAppDispatch()
+  const { messages, typing, loading } = useAppSelector((state) => state.chat)
+  const [input, setInput] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-export default function ChatPage() {
-  const dispatch = useAppDispatch();
-  const { messages, typing, loading } = useAppSelector((state) => state.chat);
-  const [input, setInput] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
-  // Scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    scrollToBottom()
+  }, [messages, typing])
 
   // Fetch chat history on mount
   useEffect(() => {
-    dispatch(fetchMessages());
-  }, [dispatch]);
+    dispatch(fetchMessages())
+  }, [dispatch])
 
-  const handleSendMessage = async (content: string, retryId?: string) => {
+  // Debug: Add logging to check Redux state
+  useEffect(() => {
+    console.log('Redux State:', {
+      messagesCount: messages.length,
+      typing,
+      loading
+    })
+  }, [messages, typing, loading])
+
+  // Auto-reset typing state after 30 seconds (safety net)
+  useEffect(() => {
+    if (typing) {
+      const timeout = setTimeout(() => {
+        console.warn('Typing state stuck - this indicates a Redux action issue')
+      }, 30000)
+      return () => clearTimeout(timeout)
+    }
+  }, [typing])
+
+  const handleSendMessage = (content: string) => {
     const userMessage: Message = {
-      id: retryId || crypto.randomUUID(),
+      id: crypto.randomUUID(),
       message: content,
       timestamp: new Date().toISOString(),
       sender: 'user',
-      status: 'sending',
-    };
-    dispatch(sendMessage(userMessage));
-  };
+      status: 'sending'
+    }
+    console.log('Sending message:', userMessage)
+    dispatch(sendMessage(userMessage))
+  }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-    handleSendMessage(input);
-    setInput('');
-  };
+  const handleSubmit = () => {
+    if (!input.trim() || typing || loading) return
+    handleSendMessage(input)
+    setInput('')
+  }
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch (err) {
+      console.error('Failed to copy text:', err)
+    }
+  }
+
+  const handleEdit = (id: string) => {
+    const message = messages.find(m => m.id === id)
+    if (message) {
+      setEditingId(id)
+      setEditValue(message.message)
+    }
+  }
+
+  const handleEditSave = () => {
+    if (!editingId || !editValue.trim()) return
+
+    // Find the message being edited
+    const messageIndex = messages.findIndex(m => m.id === editingId)
+    if (messageIndex === -1) return
+
+    // Send the edited message as a new conversation starter
+    // This will continue the conversation from this point
+    handleSendMessage(editValue)
+
+    // Clear editing state
+    setEditingId(null)
+    setEditValue('')
+  }
+
+  const handleEditCancel = () => {
+    setEditingId(null)
+    setEditValue('')
+  }
+
+  const isInputDisabled = typing || loading || editingId !== null
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
-      <div className="flex-1 overflow-auto p-4 space-y-2">
-        {loading ? (
-          <div className="flex justify-center items-center h-full">
-            <span className="text-gray-500 animate-pulse">Loading chat history...</span>
-          </div>
-        ) : (
-          <>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`max-w-[75%] p-3 rounded-xl relative whitespace-pre-wrap break-words ${msg.sender === 'user'
-                  ? 'bg-blue-500 text-white self-end ml-auto'
-                  : 'bg-gray-200 text-black self-start'
-                  }`}
-              >
-                {msg.message}
-                <div className="text-xs mt-1 text-gray-500">
-                  {new Date(msg.timestamp).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                  {msg.status === 'sending' && ' • Sending'}
-                  {msg.status === 'failed' && (
-                    <button
-                      className="text-red-500 ml-2"
-                      onClick={() => handleSendMessage(msg.message, msg.id)}
-                      title="Retry"
-                    >
-                      <RefreshCw size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {typing && !loading && (
-              <div className="bg-gray-100 text-gray-600 p-3 rounded-xl max-w-[60%] flex items-center gap-2">
-                <span className="inline-block w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0s]"></span>
-                <span className="inline-block w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                <span className="inline-block w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                <span className="ml-2">AI is typing...</span>
-              </div>
-            )}
-          </>
-        )}
-        <div ref={messagesEndRef} />
+    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Header */}
+      <div className="border-b border-slate-200 bg-white/80 backdrop-blur-sm p-4">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-2">
+            <Sparkles className="text-blue-500" />
+            AI Chat Assistant
+          </h1>
+          <p className="text-slate-600 text-sm mt-1">
+            Powered by advanced AI technology
+          </p>
+        </div>
       </div>
 
-      <form
+      {/* Messages */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-4xl mx-auto py-4">
+          {loading ? (
+            <div className="flex justify-center items-center h-full">
+              <div className="flex items-center gap-2">
+                <Loader2 size={24} className="animate-spin text-blue-500" />
+                <span className="text-slate-600 text-lg">Loading chat history...</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              {messages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  onCopy={handleCopy}
+                  onEdit={handleEdit}
+                  isEditing={editingId === message.id}
+                  editValue={editValue}
+                  onEditChange={setEditValue}
+                  onEditSave={handleEditSave}
+                  onEditCancel={handleEditCancel}
+                />
+              ))}
+
+              {typing && !loading && <TypingIndicator />}
+            </>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Input */}
+      <ChatInput
+        value={input}
+        onChange={setInput}
         onSubmit={handleSubmit}
-        className="flex border-t p-2 items-center gap-2 bg-white"
-      >
-        <input
-          type="text"
-          className="flex-1 px-4 py-2 rounded-full border outline-none"
-          placeholder="Type a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={typing || loading}
-        />
-        <button
-          type="submit"
-          className="bg-blue-500 p-2 rounded-full text-white disabled:opacity-50"
-          disabled={typing || loading || !input.trim()}
-        >
-          <SendHorizonal size={18} />
-        </button>
-      </form>
+        disabled={isInputDisabled}
+        isLoading={typing}
+      />
     </div>
-  );
+  )
 }

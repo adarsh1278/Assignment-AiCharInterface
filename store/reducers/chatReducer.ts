@@ -39,20 +39,33 @@ const chatReducer = (state = initialState, action: Action): ChatState => {
       return { ...state, loading: false, error: action.payload };
 
     case TYPES.SEND_MESSAGE_LOADING:
+      // Set typing to true when we start sending a message
       return { ...state, typing: true, error: null };
 
     case TYPES.SEND_MESSAGE_USER:
-      return { ...state, messages: [...state.messages, action.payload] };
+      // User message added, update its status to 'sent' and keep typing true as AI is about to respond
+      const updatedUserMessage = { ...action.payload, status: 'sent' };
+      return { 
+        ...state, 
+        messages: [...state.messages, updatedUserMessage],
+        typing: true // Keep typing true until AI responds
+      };
 
     case TYPES.SEND_MESSAGE_SUCCESS:
+      // AI responded successfully, stop typing
       return {
         ...state,
-        typing: false,
+        typing: false, // AI finished typing
         messages: [...state.messages, action.payload],
       };
 
     case TYPES.SEND_MESSAGE_FAILURE:
-      return { ...state, typing: false, error: action.payload };
+      // Failed to send message, stop typing
+      return { 
+        ...state, 
+        typing: false, 
+        error: action.payload 
+      };
 
     case TYPES.SET_TYPING:
       return { ...state, typing: action.payload };
@@ -63,3 +76,4 @@ const chatReducer = (state = initialState, action: Action): ChatState => {
 };
 
 export default chatReducer;
+
